@@ -4,6 +4,7 @@ import "./globals.css";
 import Link from "next/link";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Header } from "@/components/Header";
+import { Toaster } from "@/components/ui/sonner";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -26,6 +27,7 @@ export default function RootLayout({
         <body className={`${poppins.className} antialiased flex flex-col`}>
           <Header />
           <main className="min-h-screen">{children}</main>
+          <Toaster richColors />
           {/* Footer */}
           <footer className="bg-yellow-50 py-6">
             <div className="container mx-auto px-4 text-center text-gray-600">

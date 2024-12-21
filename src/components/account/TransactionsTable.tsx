@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { categoryColors } from "@/data/category";
 import {
@@ -47,7 +47,12 @@ import {
   XIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import useFetch from "@/hooks/useFetch";
+import { bulkTransactionDelete } from "@/actions/account";
+import { toast } from "sonner";
+import BarLoader from "react-spinners/BarLoader";
 
+// TODO: Add pagination
 const TransactionsTable = ({
   transactions,
 }: {
@@ -136,15 +141,45 @@ const TransactionsTable = ({
         : filteredAndSortedTransactions.map((t) => t.id)
     );
   };
-  const handleBulkDelete = () => {};
+  const {
+    loading: bulkDeleteLoading,
+    error: bulkDeleteError,
+    data: deleted,
+    fn: handleBulkDeleteFn,
+  } = useFetch(bulkTransactionDelete);
+  const handleBulkDelete = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedIds.length} transactions?`
+      )
+    ) {
+      return;
+    }
+    await handleBulkDeleteFn(selectedIds);
+    setSelectedIds([]);
+    handleClearFilters();
+  };
   const handleClearFilters = () => {
     setSearchTerm("");
     setType("");
     setRecurringFilter("");
     setSelectedIds([]);
   };
+  useEffect(() => {
+    if (deleted && !bulkDeleteLoading) {
+      toast.success("Transactions deleted successfully");
+    }
+  }, [deleted, bulkDeleteLoading]);
+  useEffect(() => {
+    if (bulkDeleteError) {
+      toast.error("Failed to delete transactions");
+    }
+  }, [bulkDeleteError]);
   return (
     <div className="space-y-4">
+      {bulkDeleteLoading && (
+        <BarLoader className="mt-4" width={"100%"} color="#9333ea" />
+      )}
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -362,7 +397,7 @@ const TransactionsTable = ({
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive"
-                        //    onClick={()=>deleteFn([transaction.id])}
+                        onClick={() => bulkTransactionDelete([transaction.id])}
                       >
                         Delete
                       </DropdownMenuItem>

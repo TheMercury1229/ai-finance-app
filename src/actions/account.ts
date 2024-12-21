@@ -102,3 +102,76 @@ export async function getAccountWithTransaction(id: string) {
     return { success: false, message: "Failed to fetch account" };
   }
 }
+
+export async function bulkTransactionDelete(transactionsIds: string[]) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+
+    const user = await db.user.findUnique({
+      where: {
+        clerkUserId: userId,
+      },
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const transactions = await db.transaction.findMany({
+      where: {
+        id: {
+          in: transactionsIds,
+        },
+        userId: user.id,
+      },
+    });
+
+    const accountBalanceChanges: { [accountId: string]: number } =
+      transactions.reduce((acc, transaction) => {
+        const change =
+          transaction.type === "INCOME"
+            ? Number(transaction.amount)
+            : -Number(transaction.amount);
+        acc[transaction.accountId] = (acc[transaction.accountId] || 0) + change;
+        return acc;
+      }, {} as { [accountId: string]: number });
+
+    // Delete the transactions and update the account balances in a transaction
+    await db.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({
+        where: {
+          id: {
+            in: transactionsIds,
+          },
+          userId: user.id,
+        },
+      });
+
+      for (const [accountId, balanceChange] of Object.entries(
+        accountBalanceChanges
+      )) {
+        await tx.account.update({
+          where: {
+            id: accountId,
+          },
+          data: {
+            balance: {
+              increment: Number(balanceChange), // Ensure balanceChange is a number
+            },
+          },
+        });
+      }
+    });
+
+    // Revalidate relevant paths
+    revalidatePath("/dashboard");
+    revalidatePath("/account/[accountId]", "layout");
+    return { success: true };
+  } catch (error: any) {
+    console.error(error.message);
+    return { success: false, message: "Failed to delete transactions" };
+  }
+}

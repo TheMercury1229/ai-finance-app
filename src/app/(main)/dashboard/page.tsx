@@ -5,12 +5,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Account } from "@prisma/client";
 import { PlusIcon } from "lucide-react";
 import React from "react";
+import { getCurrentBudget } from "@/actions/budget";
+import BudgetProgress from "@/components/dashboard/BudgetProgress";
 
 const DashboardPage = async () => {
   const accounts = await getUserAccounts();
+  const defaultAccount = accounts.find((account) => account.isDefault);
+  let budgetData = null;
+  if (defaultAccount) {
+    budgetData = await getCurrentBudget(defaultAccount.id);
+  }
   return (
-    <div className="px-5">
+    <div className="px-5 space-y-8">
       {/* Budget Progress */}
+      {defaultAccount && (
+        <BudgetProgress
+          initalBudget={budgetData?.budget || 0}
+          currentExpense={budgetData?.currentExpenses || 0}
+        />
+      )}
 
       {/* Overview */}
 

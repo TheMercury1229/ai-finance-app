@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import React, { Suspense } from "react";
 import BarLoader from "react-spinners/BarLoader";
 
-const AccountPage = async ({ params }: { params: { id: string } }) => {
+const AccountPage = async ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const accountData = await getAccountWithTransaction(id);
   if (!accountData) {

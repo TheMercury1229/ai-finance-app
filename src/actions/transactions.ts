@@ -5,6 +5,7 @@ import { db } from "@/lib/prisma";
 import { request } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
 import { InlineDataPart } from "@google/generative-ai";
+import { Transaction } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
 function calculateRecurringDate(transactionDate: Date, frequency: string) {
@@ -170,5 +171,110 @@ export async function scanReciept(file: any) {
       error instanceof Error ? error : { message: "Unknown error", error }
     );
     throw new Error("Failed to scan reciept");
+  }
+}
+
+export async function getTransaction(id:string){
+  try {
+    const transaction=await db.transaction.findUnique({
+      where: {
+        id: id,
+      },
+    });
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+    return { success: true, data: serialiseAmount(transaction) };
+  } catch (error: any) {
+    console.error(
+      "Error in getting transaction",
+      error instanceof Error ? error : { message: "Unknown error", error }
+    );
+    throw new Error("Failed to get transaction");
+  }
+
+}
+
+
+export async function updateTransaction(id: string, data: Transaction) {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      throw new Error("Unauthorized");
+    }
+
+    const user = await db.user.findUnique({
+      where: {
+        clerkUserId: userId,
+      },
+    });
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const transaction = await db.transaction.findUnique({
+      where: {
+        id: id,
+      },
+      include: {
+        account: true,
+      },
+    });
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
+
+    const oldBalanceChange =
+      transaction.type === "INCOME"
+        ? Number(transaction.amount)
+        : -Number(transaction.amount);
+
+    const newBalanceChange =
+      data.type === "INCOME" ? Number(data.amount) : -Number(data.amount);
+
+    const netBalanceChange = newBalanceChange - oldBalanceChange;
+
+    // Update the transaction
+    const updatedTransaction = await db.$transaction(async (tx) => {
+      const updated = await tx.transaction.update({
+        where: {
+          id: id,
+        },
+        data: {
+          ...data,
+          nextRecurringDate:
+            data.isRecurring && data.recurringInterval
+              ? calculateRecurringDate(data.date, data.recurringInterval)
+              : null,
+        },
+      });
+
+      await tx.account.update({
+        where: {
+          id: transaction.accountId,
+        },
+        data: {
+          balance: {
+            increment: netBalanceChange,
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath(`/transaction/${id}`);
+    revalidatePath(`/account/${transaction.accountId}`);
+
+    return { success: true, data: serialiseAmount(updatedTransaction) };
+  } catch (error: any) {
+    console.error(
+      "Error in updating transaction",
+      error instanceof Error ? error : { message: "Unknown error", error }
+    );
+    throw new Error(
+      error instanceof Error ? error.message : "Unknown error occurred"
+    );
   }
 }

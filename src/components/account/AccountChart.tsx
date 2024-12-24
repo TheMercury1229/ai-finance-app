@@ -101,7 +101,7 @@ const AccountChart = ({ transactions }: { transactions: Transaction[] }) => {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
-        <CardTitle className="text-base font-normal">
+        <CardTitle className="text-xl font-semibold">
           Transactions Overview
         </CardTitle>
         <Select
@@ -189,9 +189,7 @@ const AccountChart = ({ transactions }: { transactions: Transaction[] }) => {
           </ResponsiveContainer>
         </div>
       </CardContent>
-      <CardFooter>
-        <p>Card Footer</p>
-      </CardFooter>
+      
     </Card>
   );
 };

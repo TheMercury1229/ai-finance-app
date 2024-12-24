@@ -12,103 +12,132 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
-import { Category } from "@/data/category";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { transactionSchema } from "@/lib/zodSchema";
-import { Account } from "@prisma/client";
-import { useForm } from "react-hook-form";
-import useFetch from "@/hooks/useFetch";
-import { createTransaction } from "@/actions/transactions";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import CreateAccountDrawer from "@/components/CreateAccountDrawer";
-import { format } from "date-fns";
-import { CalendarIcon, CloudFog } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { toast } from "sonner";
+import CreateAccountDrawer from "@/components/CreateAccountDrawer";
 import RecieptScanner from "./RecieptScanner";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { transactionSchema } from "@/lib/zodSchema";
+import { Account, Transaction } from "@prisma/client";
+import { useForm } from "react-hook-form";
+import { useRouter, useSearchParams } from "next/navigation";
+import { format } from "date-fns";
+import { CalendarIcon, Loader2Icon } from "lucide-react";
+import { useEffect, useCallback } from "react";
+import { toast } from "sonner";
+import useFetch from "@/hooks/useFetch";
+import { createTransaction, updateTransaction } from "@/actions/transactions";
+import { Category } from "@/data/category";
+
 const AddTransactionForm = ({
   accounts,
   categories,
+  editMode,
+  initialData,
 }: {
   accounts: Account[];
   categories: Category[];
+  editMode?: boolean;
+  initialData?: Transaction;
 }) => {
+  const searchParams = useSearchParams();
+  const editId = searchParams?.get("edit");
+
+  const router = useRouter();
   const {
     register,
     setValue,
     handleSubmit,
     formState: { errors },
     watch,
-    getValues,
     reset,
   } = useForm({
     resolver: zodResolver(transactionSchema),
-    defaultValues: {
-      type: "EXPENSE",
-      amount: "",
-      description: "",
-      accountId:
-        accounts.find((account) => account.isDefault)?.id || accounts[0].id,
-      date: new Date(),
-      isRecurring: false,
-      category: categories[0].id,
-      recurringInterval: "DAILY",
-    },
+    defaultValues:
+      editId && editMode && initialData
+        ? {
+            type: initialData.type,
+            description: initialData.description,
+            accountId: initialData.accountId,
+            category: initialData.category,
+            isRecurring: initialData.isRecurring,
+            amount: String(initialData.amount),
+            date: new Date(initialData.date),
+            ...(initialData.recurringInterval ? { recurringInterval: initialData.recurringInterval } : {})
+          }
+        : {
+            type: "EXPENSE",
+            amount: "",
+            description: "",
+            accountId:
+              accounts.find((account) => account.isDefault)?.id ||
+              accounts[0].id,
+            date: new Date(),
+            isRecurring: false,
+            category: categories[0].id,
+            recurringInterval: "DAILY",
+          },
   });
-  const router = useRouter();
-  const filteredCategories = categories.filter(
-    (category) => category.type === getValues("type")
-  );
+
   const {
     loading: isLoading,
     fn: transactionFn,
     data: transactionRes,
-    error,
-  } = useFetch(createTransaction);
+  } = useFetch(editId? updateTransaction : createTransaction);
+
   const type = watch("type");
   const isRecurring = watch("isRecurring");
   const date = watch("date");
-    const onSubmit = async (data: any) => {
-  const formData = {
-    ...data,
-    amount: Number(data.amount),
-  };
-  
-  await transactionFn(formData);
 
+  const onSubmit = async (data: any) => {
+    const formData = {
+      ...data,
+      amount: Number(data.amount),
+    };
+
+    await editId ? transactionFn(editId,formData) : transactionFn(formData);
   };
+
   useEffect(() => {
     if (transactionRes?.success && !isLoading) {
+      if(editId){
+        toast.success("Transaction updated successfully");
+      }else{
       toast.success("Transaction added successfully");
+      }
       reset();
       router.push(`/account/${transactionRes.data.accountId}`);
     }
   }, [transactionRes, isLoading]);
-  const handleScanComplete = (data: any) => {
-    if (data) {
-      setValue("amount",data.amount?.toString());
-      if (data.description) {
-        setValue("description", data.description);
-      }
 
-      setValue("category", data.category);
-      setValue("date", new Date(data.date));
-    }
-  };
+  const handleScanComplete = useCallback(
+    (data: any) => {
+      if (data) {
+        setValue("amount", data.amount?.toString());
+        if (data.description) setValue("description", data.description);
+        setValue("category", data.category);
+        setValue("date", new Date(data.date));
+      }
+    },
+    [setValue]
+  );
+
+  const filteredCategories = categories.filter(
+    (category) => category.type === type
+  );
 
   return (
     <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
-      {/* Ai receipt scanner  */}
-      <RecieptScanner onScanComplete={handleScanComplete} />
+      {/* Receipt Scanner */}
+      {!editId && <RecieptScanner onScanComplete={handleScanComplete} />}
+
+      {/* Transaction Type */}
       <div className="space-y-2">
         <label htmlFor="type" className="text-sm font-medium">
           Type
         </label>
         <Select
-          name="type"
           onValueChange={(value) => setValue("type", value)}
           defaultValue={type}
         >
@@ -122,6 +151,8 @@ const AddTransactionForm = ({
         </Select>
         {errors.type && <p className="text-red-500">{errors.type.message}</p>}
       </div>
+
+      {/* Amount and Account */}
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
           <label className="text-sm font-medium">Amount</label>
@@ -135,27 +166,25 @@ const AddTransactionForm = ({
             <p className="text-red-500">{errors.amount.message}</p>
           )}
         </div>
-
         <div className="space-y-2">
           <label htmlFor="account" className="text-sm font-medium">
             Account
           </label>
           <Select
-            name="account"
             onValueChange={(value) => setValue("accountId", value)}
-            defaultValue={getValues("accountId")}
+            defaultValue={watch("accountId")}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
             <SelectContent>
               {accounts.map((account) => (
-                <SelectItem key={account.name} value={account.id}>
+                <SelectItem key={account.id} value={account.id}>
                   {account.name} - {Number(account.balance).toFixed(2)}
                 </SelectItem>
               ))}
               <CreateAccountDrawer>
-                <Button className="w-full" variant={"ghost"}>
+                <Button className="w-full" variant="ghost">
                   Create Account
                 </Button>
               </CreateAccountDrawer>
@@ -166,22 +195,23 @@ const AddTransactionForm = ({
           )}
         </div>
       </div>
+
+      {/* Categories and Date */}
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
           <label htmlFor="category" className="text-sm font-medium">
             Category
           </label>
           <Select
-            name="category"
             onValueChange={(value) => setValue("category", value)}
-            defaultValue={getValues("category")}
+            defaultValue={watch("category")}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
               {filteredCategories.map((category) => (
-                <SelectItem key={category.name} value={category.id}>
+                <SelectItem key={category.id} value={category.id}>
                   {category.name}
                 </SelectItem>
               ))}
@@ -197,44 +227,30 @@ const AddTransactionForm = ({
           </label>
           <Popover>
             <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className="w-full pl-3 text-left font-normal"
-              >
+              <Button variant="outline" className="w-full text-left">
                 {date ? format(date, "PPP") : "Pick a date"}
                 <CalendarIcon className="ml-auto size-4 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
+            <PopoverContent align="start">
               <Calendar
                 mode="single"
-                initialFocus
                 selected={date}
-                onSelect={(date) => date && setValue("date", date)}
+                onSelect={(selectedDate) =>
+                  selectedDate && setValue("date", selectedDate)
+                }
                 disabled={(date) =>
                   date > new Date() || date < new Date("1900-01-01")
                 }
               />
             </PopoverContent>
           </Popover>
-
           {errors.date && <p className="text-red-500">{errors.date.message}</p>}
         </div>
       </div>
-      <div className="space-y-2">
-        <label htmlFor="description" className="text-sm font-medium">
-          Description
-        </label>
-        <Input
-          type="text"
-          placeholder="Add a description"
-          {...register("description")}
-        />
-        {errors.description && (
-          <p className="text-red-500">{errors.description.message}</p>
-        )}
-      </div>
-      <div className="space-y-2 flex items-center justify-between rounded-lg border p-3">
+
+      {/* Recurring Transaction */}
+      <div className="flex items-center justify-between space-y-2 rounded-lg border p-3">
         <div>
           <label htmlFor="isRecurring" className="text-sm font-medium">
             Recurring transaction
@@ -244,23 +260,19 @@ const AddTransactionForm = ({
           </p>
         </div>
         <Switch
-          id="isDefault"
-          onCheckedChange={(value: boolean) => setValue("isRecurring", value)}
-          checked={watch("isRecurring")}
+          onCheckedChange={(value) => setValue("isRecurring", value)}
+          checked={isRecurring}
         />
       </div>
 
       {isRecurring && (
         <div className="space-y-2">
           <label htmlFor="recurringInterval" className="text-sm font-medium">
-            Reccuring interval
+            Recurring Interval
           </label>
           <Select
-            name="recurringInterval"
-            onValueChange={(value: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY") =>
-              setValue("recurringInterval", value)
-            }
-            defaultValue={"MONTHLY"}
+            onValueChange={(value) => setValue("recurringInterval", value)}
+            defaultValue={watch("recurringInterval")}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select recurring interval" />
@@ -278,12 +290,20 @@ const AddTransactionForm = ({
         </div>
       )}
 
-      <div className="flex items-center mt-4 justify-end gap-2 z-[50]">
-        <Button variant={"outline"} type="button" onClick={() => router.back()}>
+      {/* Buttons */}
+      <div className="flex items-center mt-4 justify-end gap-2">
+        <Button variant="outline" type="button" onClick={() => router.back()}>
           Cancel
         </Button>
         <Button type="submit" disabled={isLoading}>
-          Create Transaction
+          {isLoading ? (
+            <>
+              <Loader2Icon className="animate-spin mr-2" />
+             {editId? "Updating...": "Creating..."}
+            </>
+          ) : (
+            editId?"Update Transaction":"Create Transaction"
+          )}
         </Button>
       </div>
     </form>

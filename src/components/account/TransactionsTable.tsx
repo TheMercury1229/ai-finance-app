@@ -67,7 +67,6 @@ const TransactionsTable = ({
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [type, setType] = useState<"INCOME" | "EXPENSE" | "">("");
   const [recurringFilter, setRecurringFilter] = useState("");
-  const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortedConfig, setSortedConfig] = useState<{
     field: string;
@@ -83,6 +82,7 @@ const TransactionsTable = ({
           : "asc",
     }));
   };
+  const router = useRouter();
   const filteredAndSortedTransactions = useMemo(() => {
     let result = [...transactions];
     // Apply search filter
@@ -318,7 +318,10 @@ const TransactionsTable = ({
               </TableCell>
             )}
             {filteredAndSortedTransactions.map((transaction) => (
-              <TableRow key={transaction.id}>
+              <TableRow key={transaction.id} onClick={()=>{
+                router.push(`/transaction/create?edit=${transaction.id}`)
+
+              }}>
                 <TableCell className="w-[50px]">
                   <Checkbox
                     onCheckedChange={() => handleSelect(transaction.id)}

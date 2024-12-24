@@ -1,12 +1,14 @@
-import { getUserAccounts } from "@/actions/dashboard";
+import { getDashboardData, getUserAccounts } from "@/actions/dashboard";
 import { AccountCard } from "@/components/dashboard/AccountCard";
 import CreateAccountDrawer from "@/components/CreateAccountDrawer";
 import { Card, CardContent } from "@/components/ui/card";
 import { Account } from "@prisma/client";
 import { PlusIcon } from "lucide-react";
-import React from "react";
+import React, { Suspense } from "react";
 import { getCurrentBudget } from "@/actions/budget";
 import BudgetProgress from "@/components/dashboard/BudgetProgress";
+import BarLoader from "react-spinners/BarLoader";
+import DashboardOverview from "@/components/dashboard/DashboardOverview";
 
 const DashboardPage = async () => {
   const accounts = await getUserAccounts();
@@ -15,6 +17,7 @@ const DashboardPage = async () => {
   if (defaultAccount) {
     budgetData = await getCurrentBudget(defaultAccount.id);
   }
+  const transactions = await getDashboardData();
   return (
     <div className="px-5 space-y-8">
       {/* Budget Progress */}
@@ -26,6 +29,11 @@ const DashboardPage = async () => {
       )}
 
       {/* Overview */}
+      <Suspense
+        fallback={<BarLoader className="mt-4" width={"100%"} color="#9333ea" />}
+      >
+        <DashboardOverview accounts={accounts} transactions={transactions} />
+      </Suspense>
 
       {/* Accounts Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

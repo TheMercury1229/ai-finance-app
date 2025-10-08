@@ -118,11 +118,18 @@ export async function createTransaction(data: any) {
 
 export async function scanReciept(file: any) {
   try {
-    const model = genAi.getGenerativeModel({ model: "gemini-1.5-flash" });
-    // Convert file to array buffer
+    if (!file || typeof file.arrayBuffer !== "function") {
+      throw new Error("Invalid file provided");
+    }
+
+    const model = genAi.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    // Convert file to array buffer and then base64
     const arrayBuffer = await file.arrayBuffer();
-    // Convert array buffer to base64
-    const base64String = Buffer.from(arrayBuffer).toString("base64");
+    // Buffer.from accepts ArrayBuffer by converting to Buffer
+    const buffer = Buffer.from(arrayBuffer as ArrayBuffer);
+    const base64String = buffer.toString("base64");
+
     const prompt = `Analyze this receipt image and extract the following information in JSON format:
       - Total amount (just the number)
       - Date (in ISO format)
@@ -139,44 +146,75 @@ export async function scanReciept(file: any) {
         "category": "string"
       }
 
-      If its not a recipt, return an empty object`;
+      If it's not a receipt, return an empty object`;
+
     const result = await model.generateContent([
       {
         inlineData: {
           data: base64String,
-          mimeType: file.type,
+          mimeType: file.type || "image/png",
         },
       },
-     prompt,
+      prompt,
     ]);
-    const response=await result.response;
-    const text=await response.text();
-    const cleanedText=text.replace(/```(?:json)?\n?/g,"").trim();
+
+    const response = await result.response;
+    const text = await response.text();
+
+    // Remove markdown fences and any leading/trailing text
+    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+
+    // Try to locate first { ... } in the text as a fallback
+    const firstBrace = cleanedText.indexOf("{");
+    const lastBrace = cleanedText.lastIndexOf("}");
+    const jsonCandidate =
+      firstBrace !== -1 && lastBrace !== -1
+        ? cleanedText.slice(firstBrace, lastBrace + 1)
+        : cleanedText;
+
     try {
-        const data=JSON.parse(cleanedText);
-        return {
-            amount: parseFloat(data.amount),
-            date: new Date(data.date),
-            description: data.description,
-            category: data.category,
-            merchantName: data.merchantName
-        }   
-    } catch (error) {
-        console.log("Error in parsing JSON",error);
-        throw new Error("Failed to parse JSON");
+      const data = JSON.parse(jsonCandidate);
+
+      // Validate and normalize fields; return empty object when AI says it's not a receipt
+      if (!data || Object.keys(data).length === 0) return {};
+
+      const parsedAmount =
+        data.amount === undefined || data.amount === null
+          ? null
+          : Number(parseFloat(String(data.amount)));
+
+      const parsedDate = data.date ? new Date(data.date) : null;
+
+      return {
+        amount: parsedAmount,
+        date: parsedDate,
+        description: data.description || "",
+        category: data.category || "other-expense",
+        merchantName: data.merchantName || "",
+      };
+    } catch (err) {
+      console.log(
+        "Error in parsing JSON from model response:",
+        err,
+        "raw:",
+        text
+      );
+      // Return empty object rather than throwing so callers can handle gracefully
+      return {};
     }
   } catch (error) {
     console.error(
       "Error in scanning reciept",
       error instanceof Error ? error : { message: "Unknown error", error }
     );
-    throw new Error("Failed to scan reciept");
+    // Bubble up a descriptive error so callers know scanning failed
+    throw new Error("Failed to scan receipt");
   }
 }
 
-export async function getTransaction(id:string){
+export async function getTransaction(id: string) {
   try {
-    const transaction=await db.transaction.findUnique({
+    const transaction = await db.transaction.findUnique({
       where: {
         id: id,
       },
@@ -192,9 +230,7 @@ export async function getTransaction(id:string){
     );
     throw new Error("Failed to get transaction");
   }
-
 }
-
 
 export async function updateTransaction(id: string, data: Transaction) {
   try {

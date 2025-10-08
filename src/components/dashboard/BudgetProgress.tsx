@@ -117,13 +117,13 @@ const BudgetProgress = (props: {
             <Progress
               value={percentUsed}
               //   @ts-ignore
-              extraStyles={`${
-                percentUsed >= 90
-                  ? "bg-red-500"
-                  : percentUsed >= 50
-                  ? "bg-yellow-500"
-                  : "bg-green-500"
-              }`}
+              // extraStyles={`${
+              //   percentUsed >= 90
+              //     ? "bg-red-500"
+              //     : percentUsed >= 50
+              //     ? "bg-yellow-500"
+              //     : "bg-green-500"
+              // }`}
             />
             <p className="text-sm mt-2 text-muted-foreground text-right">
               {percentUsed.toFixed(1)}% used

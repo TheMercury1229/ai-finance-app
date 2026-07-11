@@ -110,7 +110,7 @@ export async function createTransaction(data: any) {
   } catch (error: any) {
     console.error(
       "Error in creating transaction",
-      error instanceof Error ? error : { message: "Unknown error", error }
+      error instanceof Error ? error : { message: "Unknown error", error },
     );
     throw new Error("Failed to create transaction");
   }
@@ -122,7 +122,7 @@ export async function scanReciept(file: any) {
       throw new Error("Invalid file provided");
     }
 
-    const model = genAi.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAi.getGenerativeModel({ model: "gemini-3.1-flash-lite" });
 
     // Convert file to array buffer and then base64
     const arrayBuffer = await file.arrayBuffer();
@@ -197,7 +197,7 @@ export async function scanReciept(file: any) {
         "Error in parsing JSON from model response:",
         err,
         "raw:",
-        text
+        text,
       );
       // Return empty object rather than throwing so callers can handle gracefully
       return {};
@@ -205,7 +205,7 @@ export async function scanReciept(file: any) {
   } catch (error) {
     console.error(
       "Error in scanning reciept",
-      error instanceof Error ? error : { message: "Unknown error", error }
+      error instanceof Error ? error : { message: "Unknown error", error },
     );
     // Bubble up a descriptive error so callers know scanning failed
     throw new Error("Failed to scan receipt");
@@ -226,7 +226,7 @@ export async function getTransaction(id: string) {
   } catch (error: any) {
     console.error(
       "Error in getting transaction",
-      error instanceof Error ? error : { message: "Unknown error", error }
+      error instanceof Error ? error : { message: "Unknown error", error },
     );
     throw new Error("Failed to get transaction");
   }
@@ -307,10 +307,10 @@ export async function updateTransaction(id: string, data: Transaction) {
   } catch (error: any) {
     console.error(
       "Error in updating transaction",
-      error instanceof Error ? error : { message: "Unknown error", error }
+      error instanceof Error ? error : { message: "Unknown error", error },
     );
     throw new Error(
-      error instanceof Error ? error.message : "Unknown error occurred"
+      error instanceof Error ? error.message : "Unknown error occurred",
     );
   }
 }
